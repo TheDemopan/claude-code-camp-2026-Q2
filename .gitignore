@@ -1,6 +1,6 @@
 # Windows Zone.Identifier files (WSL download metadata)
 *Zone.Identifier
 
-# Environment / secrets
+# Environment / secrets (Test change push)
 .env
 .env.local
