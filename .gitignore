@@ -4,3 +4,23 @@
 # Environment / secrets 
 .env
 .env.local
+
+# Node.js / npm
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Python / virtual environments
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
