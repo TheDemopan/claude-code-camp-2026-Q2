@@ -1,0 +1,6 @@
+# MUD World Map
+
+## The Temple Of Midgaard
+**Description:** You are in the southern end of the temple hall in the Temple of Midgaard. The temple has been constructed from giant marble blocks, eternal in appearance, and most of the walls are covered by ancient wall paintings picturing Gods, giants and peasants. Large steps lead down through the grand temple gate, descending the huge mound upon which the temple is built and ends on the temple square below. To the west, you see the Reading Room. The donation room is in a small alcove to your east.
+**Exits:** n, e, s, w, d
+**Notable Objects:** An automatic teller machine (ATM) has been installed in the wall here.
