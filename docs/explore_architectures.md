@@ -16,3 +16,5 @@ Immediate issues
  - Staying within repo scope
  - Memory discipline
  - Persistent MUD connection
+
+ 

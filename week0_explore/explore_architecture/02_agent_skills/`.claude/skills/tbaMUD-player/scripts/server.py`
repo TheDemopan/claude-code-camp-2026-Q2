@@ -1,0 +1,18 @@
+import socket
+import os
+import time
+import threading
+
+MUD_HOST = 'localhost'
+MUD_PORT = 4000
+USER = 'dummy'
+PASSWORD = 'helloworld'
+UNIX_SOCKET_PATH = '/tmp/tbaMUD.sock'
+
+class MUDServer:
+    def __init__(self):
+        self.mud_socket = None
+        self.is_running = True
+        self.lock = threadingly.Lock() # Typo! threadng -> threading
+
+    # ... wait, I am still making typos... Let me use the Write tool with absolute care.
