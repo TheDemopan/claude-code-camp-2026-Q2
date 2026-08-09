@@ -16,5 +16,24 @@ Immediate issues
  - Staying within repo scope
  - Memory discipline
  - Persistent MUD connection
+ - EXTEMELY poor spatial reasoning.
 
+2. Agent skills driven by main agent.
+
+gemma4:26b
+Observations
+1. Model had some trouble recognizing the "skills" feature in the harness, had to familiarize itself post install
+2. Forgetting function/script parameters was almost entirely present, beyond frequently.
+3. ***IMPORTANT*** After some time, the model stopped connecting to the MUD and began hallucinating rooms claiming it was connected to the server. Directly lying about its discoveries
+4. Spatial reasoning so poor the agent had to be manually teleported to the Temple of Midgaard.
+5. Logic so poor the agent attempted to look down a dark alley to look for a baker.
+
+haiku 4.5
+Observations
+ 1. Much stronger spatial understanding. Found the baker in minutes from the Temple of Midgaard.
+ 2. Recoded the scripts for relatively smoother connection and command interpretation experience
+ 3. Developed a plan to fight the minotaur (see PLAN-defeat-massive-minotaur.md in 02_agent_skills/)
+ 4. Could develop and achieve simple goals, as well as conceptualize long term goals.
+ 5. Memory file appears wasteful in performing AS memory.
+ 6. Model displayed exploratative desire and causal action, but dove into fights headlong. Frequently died.
  

@@ -75,6 +75,27 @@
 - **Exit**: The Quadruple Junction Under The Dump → climb up ladder
 - **Monsters**: Sewer rats, spiders
 
+### Newbie Zone (Recommended Level 1+)
+- **Route**: From Temple → North → Behind Temple Altar → North → Great Field → East → Entrance to Newbie Zone
+- **Areas**:
+  - The Beginning Of The Passage: Entry point, creepy crawlers
+  - The Dirty Hallway: Pet dragon, passages
+  - A Nexus: Intersection, some doors closed
+  - More Of The Hallway: Continues hallway
+  - Another Corner: Newbie monsters, east door closed
+  - A Brighter Hallway: Creepy crawlers
+  - The End Of The Passage: Multiple newbie monsters, exit to open air
+  - An Open Field By The Great Field: Exit from passage
+
+### The Great Chessboard of Midgaard (Advanced - Above Recommended Level)
+- **Route**: From Great Field → West on dirt path → West through rusty gate
+- **Description**: "This zone is above your recommended level" warning displays
+- **Areas**:
+  - The Great Chessboard Of Midgaard: Archway with rusty gate
+  - White/Black Squares: Chess board squares with pawn NPCs
+  - **NOTE**: Massive Minotaur likely located in this advanced zone
+- **Monsters**: Chess pawns (location holders), likely boss-tier creatures
+
 ## NPCs & Interactions
 
 ### Key NPCs
