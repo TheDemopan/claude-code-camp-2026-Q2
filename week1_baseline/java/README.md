@@ -189,7 +189,7 @@ negotiation, and reads until CircleMUD's `"> "` prompt sentinel.
 ## Session logs
 
 Every run appends JSONL to `<config-dir>/sessions/<session-id>.jsonl`. Each line carries
-`session_id`, an ISO-8601 `at`, a `phase`, and phase-specific fields.
+`session_id`, an ISO-8601 `at`, a `phase`, and phase-specific fields. (/sessions is not committed to the repo)
 
 ```
 session_start → turn → iteration → prompt → plan → response(tool_use)
