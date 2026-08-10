@@ -18,6 +18,7 @@ Immediate issues
  - Persistent MUD connection
  - EXTEMELY poor spatial reasoning.
 
+
 2. Agent skills driven by main agent.
 
 gemma4:26b
@@ -36,4 +37,14 @@ Observations
  4. Could develop and achieve simple goals, as well as conceptualize long term goals.
  5. Memory file appears wasteful in performing AS memory.
  6. Model displayed exploratative desire and causal action, but dove into fights headlong. Frequently died.
+
+
+ 3. Subagent SDK
+
+ haiku 4.5
+ Observations
+ 1. the harness appropriately created a subagent to run dummy. successful in spatial navigation and even inferred that I might want to buy something from the baker, returning wares and telling me how much of each I could purchase
+ 2. The second subagent was particularly unintelligent, having to explore around again, despite the memory file, and improperly utilizing scripts. It attempted to create a new user "Goodbyemoon"
+ 3. Dummy successfully made it to the swordmaster's guild. Smarty had to be interrupted as it was going the opposite direction and was making its own scripts excessively.
+ 4. Definitive advantage is being able to run these subagents in parallel.
  
