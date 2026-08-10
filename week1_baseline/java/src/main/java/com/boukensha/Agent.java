@@ -3,7 +3,6 @@ package com.boukensha;
 import com.boukensha.api.Client;
 import com.boukensha.exception.ApiError;
 import com.boukensha.model.Context;
-import com.boukensha.model.Message;
 import com.boukensha.model.PromptBuilder;
 import com.boukensha.tool.Registry;
 import java.util.List;

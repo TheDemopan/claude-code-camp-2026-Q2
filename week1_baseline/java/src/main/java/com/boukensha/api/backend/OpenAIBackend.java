@@ -78,7 +78,10 @@ public class OpenAIBackend extends Backend {
 
     Map<String, Object> result = new HashMap<>();
     result.put("role", "assistant");
-    result.put("content", textBlocks.stream().map(b -> b.get("text")).reduce("", (a, b) -> a + b.toString()));
+    String text = textBlocks.stream()
+        .map(b -> (String) b.get("text"))
+        .reduce("", (a, b) -> a + b);
+    result.put("content", text);
 
     if (!toolBlocks.isEmpty()) {
       List<Map<String, Object>> toolCalls = new ArrayList<>();
@@ -139,9 +142,12 @@ public class OpenAIBackend extends Backend {
   @SuppressWarnings("unchecked")
   public Map<String, Object> parseResponse(Map<String, Object> response) {
     List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
-    Map<String, Object> message = new HashMap<>();
+    Map<String, Object> message = null;
     if (choices != null && !choices.isEmpty()) {
       message = (Map<String, Object>) choices.get(0).get("message");
+    }
+    if (message == null) {
+      message = new HashMap<>();
     }
 
     List<Map<String, Object>> content = new ArrayList<>();

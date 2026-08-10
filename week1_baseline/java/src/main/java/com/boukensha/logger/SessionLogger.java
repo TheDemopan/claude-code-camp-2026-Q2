@@ -1,6 +1,7 @@
 package com.boukensha.logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -30,7 +31,10 @@ public class SessionLogger {
     this.objectMapper = new ObjectMapper();
 
     // Ensure directory exists
-    Files.createDirectories(Paths.get(new java.io.File(path).getParent()));
+    String parentDir = new File(path).getParent();
+    if (parentDir != null) {
+      Files.createDirectories(Paths.get(parentDir));
+    }
 
     this.logWriter = new FileWriter(path, true);
     writeLog(mergeMap(snapshot, Map.of("phase", "session_start")));

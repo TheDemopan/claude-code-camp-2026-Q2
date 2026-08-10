@@ -67,7 +67,10 @@ public class OllamaBackend extends Backend {
 
     Map<String, Object> result = new HashMap<>();
     result.put("role", "assistant");
-    result.put("content", textBlocks.stream().map(b -> b.get("text")).reduce("", (a, b) -> a + b.toString()));
+    String text = textBlocks.stream()
+        .map(b -> (String) b.get("text"))
+        .reduce("", (a, b) -> a + b);
+    result.put("content", text);
 
     if (!toolBlocks.isEmpty()) {
       List<Map<String, Object>> toolCalls = new ArrayList<>();

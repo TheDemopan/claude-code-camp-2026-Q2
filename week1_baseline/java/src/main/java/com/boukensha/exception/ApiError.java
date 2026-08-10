@@ -1,6 +1,6 @@
 package com.boukensha.exception;
 
-public class ApiError extends BoukenkshaException {
+public class ApiError extends BoukenshaException {
   public ApiError(String message) {
     super(message);
   }

@@ -2,6 +2,7 @@ package com.boukensha.api;
 
 import com.boukensha.exception.ApiError;
 import com.boukensha.model.PromptBuilder;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -9,22 +10,12 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import java.io.IOException;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 public class Client {
   private static final int[] RETRYABLE_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504};
   private static final int MAX_RETRIES = 3;
   private static final double BASE_RETRY_DELAY = 0.5; // seconds
-  private static final Set<Class<?>> TRANSIENT_ERRORS = new HashSet<>(Arrays.asList(
-      SocketException.class,
-      SocketTimeoutException.class,
-      IOException.class
-  ));
 
   private final PromptBuilder builder;
   private final OkHttpClient httpClient;
@@ -41,6 +32,10 @@ public class Client {
     Map<String, String> headers = builder.getHeaders();
     Map<String, Object> payload = builder.toApiPayload(opts);
 
+    // Built once, outside the retry loop: serializing the payload is
+    // deterministic, so a failure here is a payload bug that retrying cannot fix.
+    Request request = buildRequest(url, headers, payload);
+
     int attempts = 0;
     Response response = null;
 
@@ -48,39 +43,19 @@ public class Client {
       attempts++;
 
       try {
-        String jsonBody = objectMapper.writeValueAsString(payload);
-        RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
-
-        Request.Builder requestBuilder = new Request.Builder()
-            .url(url)
-            .post(body);
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-          requestBuilder.addHeader(header.getKey(), header.getValue());
-        }
-        Request request = requestBuilder.build();
-
         response = httpClient.newCall(request).execute();
-      } catch (Exception e) {
+      } catch (IOException e) {
+        // Transient network failure: timeout, connection reset, SSL error.
         if (attempts > MAX_RETRIES) {
           throw new ApiError("API request failed after " + attempts + " attempts: " + e.getClass().getName() + ": " + e.getMessage());
         }
-        try {
-          Thread.sleep((long) (retryDelay(attempts) * 1000));
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          throw new ApiError("Interrupted during retry");
-        }
+        sleepBeforeRetry(attempts);
         continue;
       }
 
       if (isRetryableStatus(response.code()) && attempts <= MAX_RETRIES) {
-        try {
-          Thread.sleep((long) (retryDelay(attempts) * 1000));
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new ApiError("Interrupted during retry");
-        }
         response.close();
+        sleepBeforeRetry(attempts);
         continue;
       }
 
@@ -107,6 +82,31 @@ public class Client {
       throw new ApiError("Failed to parse API response: " + e.getMessage());
     } finally {
       response.close();
+    }
+  }
+
+  private Request buildRequest(String url, Map<String, String> headers, Map<String, Object> payload) {
+    String jsonBody;
+    try {
+      jsonBody = objectMapper.writeValueAsString(payload);
+    } catch (JsonProcessingException e) {
+      throw new ApiError("Failed to serialize request payload: " + e.getMessage(), e);
+    }
+
+    RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
+    Request.Builder requestBuilder = new Request.Builder().url(url).post(body);
+    for (Map.Entry<String, String> header : headers.entrySet()) {
+      requestBuilder.addHeader(header.getKey(), header.getValue());
+    }
+    return requestBuilder.build();
+  }
+
+  private void sleepBeforeRetry(int attempt) {
+    try {
+      Thread.sleep((long) (retryDelay(attempt) * 1000));
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new ApiError("Interrupted during retry");
     }
   }
 

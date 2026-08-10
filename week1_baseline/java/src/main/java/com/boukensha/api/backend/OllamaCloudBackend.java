@@ -1,11 +1,8 @@
 package com.boukensha.api.backend;
 
 import com.boukensha.exception.UnsupportedModelError;
-import com.boukensha.model.Context;
-import com.boukensha.tool.Tool;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 public class OllamaCloudBackend extends OllamaBackend {

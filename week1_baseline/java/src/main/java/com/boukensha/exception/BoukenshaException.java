@@ -1,11 +1,11 @@
 package com.boukensha.exception;
 
-public class BoukenkshaException extends RuntimeException {
-  public BoukenkshaException(String message) {
+public class BoukenshaException extends RuntimeException {
+  public BoukenshaException(String message) {
     super(message);
   }
 
-  public BoukenkshaException(String message, Throwable cause) {
+  public BoukenshaException(String message, Throwable cause) {
     super(message, cause);
   }
 }

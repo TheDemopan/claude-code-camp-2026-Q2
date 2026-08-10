@@ -5,7 +5,6 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
@@ -91,7 +90,10 @@ public class Config {
     File envFile = new File(dir, ".env");
     if (envFile.exists()) {
       try {
-        Dotenv.load();
+        Dotenv.configure()
+            .directory(dir)
+            .ignoreIfMissing()
+            .load();
       } catch (Exception e) {
         // Silently fail if dotenv loading fails
       }
