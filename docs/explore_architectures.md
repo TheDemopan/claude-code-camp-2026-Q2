@@ -39,7 +39,7 @@ Observations
  6. Model displayed exploratative desire and causal action, but dove into fights headlong. Frequently died.
 
 
- 3. Subagent SDK
+ 3a. Subagent SDK
 
  haiku 4.5
  Observations
@@ -47,4 +47,16 @@ Observations
  2. The second subagent was particularly unintelligent, having to explore around again, despite the memory file, and improperly utilizing scripts. It attempted to create a new user "Goodbyemoon"
  3. Dummy successfully made it to the swordmaster's guild. Smarty had to be interrupted as it was going the opposite direction and was making its own scripts excessively.
  4. Definitive advantage is being able to run these subagents in parallel.
+
+
+ 3b. Subagent SDK 2
+
+haiku 4.5
+Observations
+1. The harness performed the conversion with little issue
+2. The resulting code appears to function almost identically to how it was used in the Claude CLI application
+3. This perhaps is a much more instantiated way of deploying these tools
+
+
+
  
