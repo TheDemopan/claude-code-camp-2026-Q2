@@ -1,385 +1,299 @@
-# Boukensha Java Port
+# Boukensha — Java Port
 
-A Java implementation of the Boukensha LLM agent framework. Run autonomous agents with multiple LLM backends (Anthropic Claude, OpenAI GPT, Google Gemini, Ollama).
+A Java port of the Boukensha LLM agent framework. Runs autonomous agents that call tools,
+talk to multiple LLM backends, and play a CircleMUD/tbaMUD world.
 
-## Overview
+This is a 1:1 port of `week1_baseline/ruby/`. Where the two differ, the Ruby original is
+the source of truth and the difference is documented under
+[Differences from the Ruby original](#differences-from-the-ruby-original).
 
-Boukensha is a framework for building LLM agents that can:
-- **Iterate** up to 25 times per turn, calling tools and processing responses
-- **Support multiple backends:** Anthropic Claude, OpenAI GPT, Google Gemini, Ollama (local & cloud)
-- **Log sessions** to JSONL format for replay and analysis
-- **Manage context** with message history and token tracking
-- **Handle retries** with exponential backoff on transient failures
+---
 
-This is a strict 1:1 port from Ruby, preserving all behavior and semantics.
+## Quickstart
 
-## Prerequisites
+### 1. Prerequisites
 
-- **Java 17+**
-- **Maven 3.6+**
-- **API Keys** (at least one):
-  - `ANTHROPIC_API_KEY` for Claude
-  - `OPENAI_API_KEY` for GPT
-  - `GEMINI_API_KEY` for Gemini
-  - Ollama (local) requires running `ollama serve` on `localhost:11434`
-  - `OLLAMA_API_KEY` for Ollama Cloud
+- **A JDK 17+** — a JRE is not enough, `bin/boukensha` needs `javac`. It looks in
+  `$JAVA_HOME`, then `PATH`, then JDKs bundled with VS Code / IntelliJ / SDKMAN.
+- **Dependencies in `~/.m2`** — Jackson, OkHttp, dotenv-java, SnakeYAML. If missing:
+  `mvn dependency:go-offline`.
+- **An Anthropic API key** (or OpenAI / Gemini / Ollama).
+- **A MUD on `localhost:4000`** — only for steps 10–12.
 
-## Building
+### 2. Configuration
 
-```bash
-cd week1_baseline/java
-mvn clean compile
+Config lives in a `.boukensha` directory, resolved as `$BOUKENSHA_DIR` → `~/.boukensha`.
+`bin/boukensha` defaults it to the **repo-root `.boukensha`**, shared with the Ruby port.
+
+```
+.boukensha/
+├── .env               # ANTHROPIC_API_KEY=sk-ant-...
+├── settings.yaml
+└── prompts/
+    ├── system.md            # default system prompt
+    └── player/system.md     # used when prompt_override.system is true
 ```
 
-**Dependencies:**
-- Jackson (JSON handling)
-- OkHttp (HTTP client with automatic retries)
-- dotenv4j (environment variable loading)
-- SnakeYAML (YAML config parsing)
-- JUnit 5 (testing)
-
-## Usage
-
-### 1. Configuration
-
-Create `~/.boukensha/settings.yaml`:
-
 ```yaml
+# settings.yaml
+tasks:
+  player:
+    provider: anthropic          # anthropic | openai | gemini | ollama | ollama_cloud
+    model: claude-haiku-4-5
+    prompt_override:
+      system: true               # prefer prompts/player/system.md
+
 mud:
   host: localhost
   port: 4000
-  username: player_name
+  username: dummy
   password: secret
 
-tasks:
-  player:
-    provider: anthropic
-    model: claude-haiku-4-5-20251001
+agent:                           # optional; defaults shown
+  max_iterations: 25
+  max_output_tokens: 1024
+  max_turn_tokens: 60000
+  compaction_threshold: 0.85
 ```
 
-Create `~/.boukensha/.env`:
+### 3. Run
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-OLLAMA_API_KEY=...
+cd week1_baseline/java
+./bin/00_config          # verify config loads — no API call, costs nothing
+./bin/07_the_run_dsl     # a real agent turn
+./bin/11_tui             # interactive, with a live view of the agent working
 ```
 
-### 2. Basic Agent Run
+`bin/boukensha` compiles on first run and only recompiles when sources change.
+
+---
+
+## The step launchers
+
+One per teaching step, mirroring `ruby/bin/`. Steps are cumulative — each adds one concept.
+
+| Launcher | Adds | Calls the API? |
+|---|---|---|
+| `bin/00_config` | `Config`, `Tasks` — settings.yaml, .env, prompt resolution | no |
+| `bin/01_struct_skeleton` | `Context`, `Message`, `Tool` | no |
+| `bin/02_the_registry` | `Registry` — registration + dispatch | no |
+| `bin/03_prompt_builder` | `PromptBuilder`, backends — prints the wire payload | no |
+| `bin/04_api_client` | `Client` — one real request | yes |
+| `bin/05_agent_loop` | `Agent` — the iterate/tool-call loop | yes |
+| `bin/06_the_logger` | `SessionLogger` — JSONL session logs | yes |
+| `bin/07_the_run_dsl` | `Boukensha.run` — everything wired for you | yes |
+| `bin/08_the_repl_loop` | `Repl` — multi-turn, shared context | yes |
+| `bin/09_global_executable` | the same REPL via the project launcher | yes |
+| `bin/10_standard_tool_library` | `MudTools` — 27 MUD tools | yes + MUD |
+| `bin/11_tui` | `Tui` — live event view | yes + MUD |
+| `bin/12_context` | token ceilings + compaction | yes + MUD |
+
+Run any main class directly: `./bin/boukensha com.boukensha.examples.SmokeTest`.
+`./bin/boukensha --help` prints usage.
+
+---
+
+## Using the library
+
+### One-shot run
 
 ```java
-import com.boukensha.*;
-import com.boukensha.api.Client;
-import com.boukensha.api.backend.*;
-import com.boukensha.config.Config;
-import com.boukensha.model.*;
-import com.boukensha.tool.Registry;
-import com.boukensha.logger.SessionLogger;
-
-public class Example {
-  public static void main(String[] args) throws Exception {
-    // Load configuration
-    Config config = new Config();
-    
-    // Set up context
-    String system = "You are a helpful assistant.";
-    Context context = new Context(system);
-    
-    // Register tools
-    Registry registry = new Registry(context);
-    registry.tool("echo", "Echo back the input", 
-      Map.of("text", Map.of("type", "string")),
-      args -> "Echo: " + args.get("text"));
-    
-    // Create backend (uses API key from config)
-    Backend backend = new AnthropicBackend(
-      System.getenv("ANTHROPIC_API_KEY"),
-      "claude-haiku-4-5-20251001"
-    );
-    
-    // Wire up agent
-    PromptBuilder builder = new PromptBuilder(context, backend);
-    Client client = new Client(builder);
-    SessionLogger logger = new SessionLogger(
-      null, config.getDir(), null,
-      Map.of("model", "claude-haiku-4-5-20251001", "provider", "anthropic")
-    );
-    
-    Agent agent = new Agent(context, registry, builder, client, 25, null);
-    
-    // Add user task
-    context.addMessage("user", "What is 2+2?");
-    
-    // Run agent
-    String result = agent.run();
-    System.out.println(result);
-    
-    logger.close();
-  }
-}
+String result = Boukensha.run(
+    "Read README.md and summarise it.",
+    dsl -> dsl.tool("read_file", "Read a file from disk",
+        Map.of("path", Map.of("type", "string", "description", "Path to read")),
+        args -> Files.readString(Path.of(String.valueOf(args.get("path"))))));
 ```
 
-### 3. Switching Backends
+`Boukensha.run` reads config, builds the backend, wires the client, logger, and agent, runs
+one turn, and closes the log. Override anything via `Boukensha.Options`.
+
+Ruby uses `instance_eval` so the block sees `tool` as a bare method. Java has no equivalent,
+so **the block receives the `RunDSL` as a parameter**. Use `dsl.registry()` to hand the whole
+registry to a tool library.
+
+### Assembling it yourself
 
 ```java
-// Anthropic
-Backend backend = new AnthropicBackend(apiKey, "claude-haiku-4-5-20251001");
+Config config = new Config();
+Context context = new Context(systemPrompt, Models.contextWindow(model), null, 0.85);
+Registry registry = new Registry(context);
+FileSystemTools.register(registry, workingDir);
 
-// OpenAI
-Backend backend = new OpenAIBackend(apiKey, "gpt-5.4");
+Backend backend = new AnthropicBackend(config.env("ANTHROPIC_API_KEY"), model);
+PromptBuilder builder = new PromptBuilder(context, backend);
+Client client = new Client(builder);
+SessionLogger logger = new SessionLogger(null, config.getDir() + "/sessions", null, Map.of());
 
-// Google Gemini
-Backend backend = new GeminiBackend(apiKey, "gemini-2.5-flash");
-
-// Ollama (local)
-Backend backend = new OllamaBackend("http://localhost:11434", "gemma4:e4b");
-
-// Ollama Cloud
-Backend backend = new OllamaCloudBackend(apiKey, "gemma4:31b-cloud");
+Agent agent = new Agent(context, registry, builder, client, logger, 25, 60_000, 1024);
+context.addMessage("user", "Where am I?");
+String reply = agent.run();
+logger.close();
 ```
 
-### 4. Supported Models
-
-**Anthropic:**
-- `claude-haiku-4-5`
-- `claude-haiku-4-5-20251001`
-- `claude-sonnet-4-6`
-- `claude-opus-4-8`
-
-**OpenAI:**
-- `gpt-5.5`
-- `gpt-5.4`
-- `gpt-5.4-mini`
-
-**Gemini:**
-- `gemini-3.5-flash`
-- `gemini-3.1-flash-lite`
-- `gemini-2.5-pro`
-- `gemini-2.5-flash`
-- `gemini-2.5-flash-lite`
-
-**Ollama (local):**
-- `gemma4:e4b`
-
-**Ollama Cloud:**
-- `gemma4:31b-cloud`
-- `kimi-k2.5:cloud`
-- `minimax-m3:cloud`
-
-## Core Classes
-
-### `Agent`
-Main agent loop. Iterates up to 25 times:
-- Calls backend to get response
-- Checks `stop_reason` (tool_use or end_turn)
-- If tool_use: dispatch tools and add results to context
-- Repeats until end_turn or iteration limit
-- On limit: calls wrap-up to summarize gracefully
-
-**Key methods:**
-- `run()` → String (final response)
-
-### `Client`
-HTTP client with automatic retry logic.
-- MAX_RETRIES: 3
-- BASE_DELAY: 0.5 seconds
-- Backoff: 0.5 * 2^(attempt-1) seconds
-- Retryable status codes: 408, 409, 429, 500, 502, 503, 504
-
-**Key methods:**
-- `call(Map opts)` → Map (parsed JSON response)
-
-### `Context`
-Manages conversation state.
-- Stores messages, tools, system prompt
-- Tracks token usage
-- Supports message compaction when context window fills
-
-**Key methods:**
-- `addMessage(String role, Object content, String toolUseId)`
-- `registerTool(Tool tool)`
-- `getMessages()`, `getTools()`
-- `compactMessages(double targetFraction)`
-
-### `Backend` (interface)
-Each backend handles:
-- Message transformation (normalize to common shape)
-- Tool definition wrapping (backend-specific format)
-- Response parsing (normalize to common shape)
-- Headers and URL construction
-
-**Key methods:**
-- `toMessages(List messages)` → backend-specific format
-- `toTools(Map tools)` → backend-specific format
-- `toPayload(Context, opts)` → HTTP request body
-- `parseResponse(Map)` → normalized {stop_reason, content}
-- `getHeaders()`, `getUrl()`
-
-### `SessionLogger`
-Logs all events to JSONL.
-- One JSON object per line
-- Fields: session_id, at (ISO8601 timestamp), phase, phase-specific data
-- Phases: session_start, iteration, prompt, tool_call, tool_result, response, limit_reached, turn_end
-
-**Key methods:**
-- `iteration(n, max)`
-- `prompt(messages, tools)`
-- `toolCall(name, args)`
-- `toolResult(name, result, ok, error)`
-- `response(text, usage, stopReason, task, backend)`
-- `close()`
-
-### `Tool`
-Represents a callable tool.
-- Name, description, parameters
-- Block is a `Function<Map, Object>` lambda
-
-**Key methods:**
-- `invoke(Map args)` → Object (result)
-
-### `Registry`
-Manages tool registration and dispatch.
-
-**Key methods:**
-- `tool(name, description, parameters, block)` → Tool
-- `dispatch(name, args)` → Object (calls tool block)
-
-## Logging & Session Replay
-
-Each run generates a `.jsonl` file in `~/.boukensha/sessions/`:
-
-```json
-{"session_id":"20260810T120000Z-abc123","at":"2026-08-10T12:00:00Z","phase":"session_start","model":"claude-haiku-4-5-20251001","provider":"anthropic"}
-{"session_id":"20260810T120000Z-abc123","at":"2026-08-10T12:00:01Z","phase":"iteration","n":1,"max":25}
-{"session_id":"20260810T120000Z-abc123","at":"2026-08-10T12:00:02Z","phase":"prompt","message_count":2,"messages":[...]}
-{"session_id":"20260810T120000Z-abc123","at":"2026-08-10T12:00:05Z","phase":"response","text":"The answer is 4.","stop_reason":"end_turn"}
-```
-
-Use these logs to:
-- Replay agent decisions
-- Analyze tool usage patterns
-- Track token consumption
-- Debug failures
-
-## Error Handling
-
-**Custom exceptions:**
-- `ApiError` — HTTP/network failures
-- `UnknownToolError` — tool not registered
-- `UnsupportedModelError` — invalid model for backend
-- `BoukenkshaException` — base exception
+### Tool libraries
 
 ```java
-try {
-  agent.run();
-} catch (ApiError e) {
-  System.err.println("API call failed: " + e.getMessage());
-} catch (UnknownToolError e) {
-  System.err.println("Tool not found: " + e.getMessage());
-}
+FileSystemTools.register(registry, workingDir);              // pwd, read_file, write_file, delete_file
+ShellTools.register(registry, workingDir, 30, List.of("git")); // run_command (timeout + allowlist)
+MudTools.register(registry, host, port, username, password);   // 27 MUD tools, auto-connects
 ```
 
-## Message Format
+`FileSystemTools` sandboxes every path to the working dir and returns an error string rather
+than throwing when one escapes. `ShellTools` takes an optional executable allowlist — omit it
+and any command runs, so pass one when the agent's input isn't trusted.
 
-All messages are normalized to a common shape internally:
+---
 
-```java
-// Content for user/assistant messages
-List<Map<String, Object>> content = List.of(
-  Map.of("type", "text", "text", "Hello")
-);
+## Architecture
 
-// Content for tool calls
-content = List.of(
-  Map.of("type", "tool_use", "id", "call_123", "name", "echo", "input", Map.of("text", "hi"))
-);
-
-// Tool results
-context.addMessage("tool_result", "Echo: hi", "call_123");
+```
+Boukensha ──── run()/config()          facade
+   │
+   ├── Config ─── Tasks/PlayerTask     settings.yaml, .env, prompts
+   ├── Context ── Message, Tool        state: history, tools, token accounting
+   ├── Registry                        tool registration + dispatch
+   ├── PromptBuilder ── Backend        per-provider wire format
+   │                     ├── AnthropicBackend
+   │                     ├── OpenAIBackend
+   │                     ├── GeminiBackend
+   │                     ├── OllamaBackend
+   │                     └── OllamaCloudBackend
+   ├── Client                          HTTP + retry
+   ├── Agent                           the loop
+   ├── SessionLogger                   JSONL + subscribe()
+   ├── Repl ───── Tui                  interactive
+   └── mud/ ───── MudSession, MudPrimitives
 ```
 
-Each backend transforms these to its native format (Anthropic content blocks, OpenAI tool_calls, Gemini parts, etc.).
+**`Agent`** iterates until the model stops requesting tools. Two independent ceilings —
+`max_iterations` and `max_turn_tokens` — are *trigger thresholds*, not hard caps: on reaching
+either, the agent stops starting work and makes one final tools-disabled wind-down call so the
+turn ends in character. A tool that throws is caught and returned to the model as
+`ERROR: ...` rather than killing the turn.
 
-## Retry Behavior
+**`Client`** retries 3 times with exponential backoff (0.5s → 1s → 2s) on `IOException` and on
+408/409/429/500/502/503/504. The request is built **once, before** the loop, so a payload
+serialization bug fails immediately instead of being retried.
 
-The `Client` automatically retries on:
-- **Transient errors:** Socket timeouts, connection resets, SSL errors
-- **Retryable status codes:** 408, 409, 429, 500, 502, 503, 504
+**`Context`** tracks two separate token figures: `currentTokens` (window pressure, from the
+last response's `input_tokens`) and `turnTokens` (cumulative spend this turn). Compaction drops
+the oldest 40% of messages, keeping at least 2.
 
-**Backoff schedule:**
-- Attempt 1: 0.5 seconds
-- Attempt 2: 1.0 seconds
-- Attempt 3: 2.0 seconds
-- Fail after 3 attempts
+**`MudSession`** holds a telnet connection with a background reader thread, strips telnet IAC
+negotiation, and reads until CircleMUD's `"> "` prompt sentinel.
 
-Each backend maintains its own HTTP client, so retries are transparent to your code.
+---
 
-## Project Structure
+## Session logs
+
+Every run appends JSONL to `<config-dir>/sessions/<session-id>.jsonl`. Each line carries
+`session_id`, an ISO-8601 `at`, a `phase`, and phase-specific fields.
+
+```
+session_start → turn → iteration → prompt → plan → response(tool_use)
+              → tool_call → tool_result → iteration → prompt
+              → response(end_turn) → turn_end
+```
+
+Other phases: `limit_reached`, `compaction`, `reasoning`, and `raw` (debug only, via
+`Boukensha.debug()`). `SessionLogger.subscribe(...)` streams every event to a listener — that
+is how the TUI renders live.
+
+```bash
+# what tools did this run call?
+grep -o '"phase":"tool_call","name":"[a-z_]*"' .boukensha/sessions/<id>.jsonl
+```
+
+---
+
+## Verification status
+
+**Verified live** against the real Anthropic API and a real tbaMUD server:
+
+| Area | Evidence |
+|---|---|
+| Config, `.env`, prompt override | `00_config` reads real settings |
+| Payload construction | `03_prompt_builder` emits valid Anthropic JSON |
+| Single request | `04_api_client` — real response |
+| Agent loop + tool dispatch | `05`/`07` — real `read_file` calls, verified in logs |
+| Logger phases | `06` — all phases present |
+| REPL multi-turn history | `08` — `message_count` grew 1 → 3 → 5 across turns |
+| MUD telnet, login, IAC | probe returned live room + score |
+| 27 MUD tools | `10` — 5 real MUD calls across 3 iterations |
+| TUI live stream | `11` — events rendered as they happened |
+| Agent loop in isolation | `SmokeTest` — 17 assertions, no network |
+
+**Not verified:**
+
+- **OpenAI, Gemini, Ollama, OllamaCloud** — they compile and their transforms were ported from
+  the Ruby source, but **no request has ever been sent** through any of them.
+- **The wind-down path** — no run has reached `max_iterations` or `max_turn_tokens`, so
+  `wrapUp` and its fallback message have never executed.
+- **Steps 06/08 error branches** — `ApiError` handling in the REPL is untested.
+
+### Running the smoke test
+
+```bash
+./bin/boukensha com.boukensha.examples.SmokeTest
+```
+
+Spins up a local stub HTTP server speaking the Anthropic response shape and drives a full
+two-iteration turn with a tool call. No credentials, no network egress, no cost — the fastest
+way to check the loop after a change.
+
+---
+
+## Differences from the Ruby original
+
+| Area | Ruby | Java |
+|---|---|---|
+| `run` block | `instance_eval`, bare `tool` | block receives `RunDSL`; `dsl.tool(...)` |
+| `.env` | `Dotenv.load` mutates `ENV` | Java can't mutate the process env — use `config.env(name)` |
+| **TUI** | charm (bubbletea/lipgloss/bubbles) | **reimplemented**, not ported — plain ANSI event stream; no viewport or key handling |
+| `mud_manager` | external gem in `week0_explore/` | ported into `com.boukensha.mud` |
+| `Tasks` + step-12 `Config` | step 12 deletes `tasks/` | both APIs kept so every step maps 1:1 |
+| Tool block | Ruby block, keyword args | `Function<Map<String,Object>, Object>` |
+| `Primitives` | returns a `Command` struct | returns the raw command `String` |
+
+Two Ruby-side quirks worth knowing: `ruby/bin/01`–`12` point `BOUKENSHA_DIR` at
+`week1_baseline/.boukensha`, which does not exist — only `00_config` uses the correct
+repo-root path, and the Java launcher follows `00_config`. And `FileSystemTools` omits
+`list_directory` / `search_files` because they are commented out in the Ruby source.
+
+---
+
+## Project layout
 
 ```
 week1_baseline/java/
-├── pom.xml                          # Maven build config
-├── .gitignore                       # Git ignore rules
+├── bin/                    boukensha + 13 step launchers
+├── prompts/system.md       default system prompt
+├── pom.xml
 └── src/main/java/com/boukensha/
-    ├── Agent.java                   # Main agent loop
-    ├── api/
-    │   ├── Client.java              # HTTP client with retry logic
-    │   └── backend/
-    │       ├── Backend.java         # Base interface
-    │       ├── AnthropicBackend.java
-    │       ├── OpenAIBackend.java
-    │       ├── GeminiBackend.java
-    │       ├── OllamaBackend.java
-    │       └── OllamaCloudBackend.java
-    ├── config/
-    │   └── Config.java              # ~/.boukensha resolution + YAML/env loading
-    ├── exception/                   # Custom exceptions
-    │   ├── BoukenkshaException.java
-    │   ├── ApiError.java
-    │   ├── UnknownToolError.java
-    │   └── UnsupportedModelError.java
-    ├── logger/
-    │   └── SessionLogger.java       # JSONL logging
-    ├── model/
-    │   ├── Message.java             # Role + content + toolUseId
-    │   ├── Context.java             # State management
-    │   └── PromptBuilder.java       # Backend adapter
-    └── tool/
-        ├── Tool.java                # Tool definition
-        └── Registry.java            # Tool registration & dispatch
+    ├── Agent, Boukensha, Models, Version
+    ├── api/       Client, backend/{Anthropic,OpenAI,Gemini,Ollama,OllamaCloud}
+    ├── config/    Config
+    ├── dsl/       RunDSL
+    ├── examples/  Step00..Step12, Example, SmokeTest
+    ├── exception/ BoukenshaException, ApiError, UnknownToolError, UnsupportedModelError
+    ├── logger/    SessionLogger
+    ├── model/     Context, Message, PromptBuilder
+    ├── mud/       MudSession, MudPrimitives
+    ├── repl/      Repl
+    ├── tasks/     Task, PlayerTask
+    ├── tool/      Tool, Registry
+    ├── tools/     FileSystemTools, ShellTools, MudTools
+    └── tui/       Tui
 ```
 
-## Testing
+## Building
 
-Unit tests not yet ported (Ruby had no existing tests). Integration tests should:
-- Test each backend against real APIs (use sandbox credentials)
-- Verify JSONL schema matches Ruby output exactly
-- Test retry logic by simulating transient errors
-- Validate message transformations per backend
+`bin/boukensha` handles compilation. Maven also works if installed:
 
-## Future Work (Phases D-E)
+```bash
+mvn compile
+```
 
-- **RunBuilder (DSL):** Fluent API for registering tools inline
-- **CLI Launcher:** `java -jar boukensha.jar --backend anthropic --model claude-haiku-4-5-20251001 "your task"`
-- **REPL Loop:** Interactive console with `/exit`, `/clear`, `/help` commands
-- **Context Compaction:** Automatic message pruning when token limit approaches
-- **Web UI (log_viz):** HTTP server to replay and visualize session logs
-
-## Contributing
-
-This is a 1:1 port from Ruby. Key principles:
-- Match Ruby behavior exactly (no "improvements")
-- Use Java idioms where they don't change semantics
-- Keep message format cross-backend compatible
-- Log to exact JSONL schema for compatibility
-
-## License
-
-[Same as Ruby implementation]
-
-## References
-
-- Ruby original: `week1_baseline/ruby/`
-- Plan: `docs/plans/java_port/00_config.md`
-- Session logs: `~/.boukensha/sessions/*.jsonl`
+Java 17+. Dependencies: Jackson 2.17, OkHttp 4.11, dotenv-java 3.0, SnakeYAML 2.0, JUnit 5.

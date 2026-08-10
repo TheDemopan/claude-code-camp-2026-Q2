@@ -24,6 +24,15 @@ public class RunDSL {
     return registry.tool(name, description, parameters, block);
   }
 
+  /**
+   * The underlying registry, so a tool library (FileSystemTools, ShellTools,
+   * MudTools) can register its whole set at once. Ruby reaches these through
+   * Boukensha.run's working_dir:/mud: keywords instead.
+   */
+  public Registry registry() {
+    return registry;
+  }
+
   /** The block form passed to Boukensha.run / Boukensha.repl. */
   @FunctionalInterface
   public interface Block {
