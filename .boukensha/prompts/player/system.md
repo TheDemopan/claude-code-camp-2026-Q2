@@ -1,0 +1,1 @@
+Return Health, hunger, and location.
