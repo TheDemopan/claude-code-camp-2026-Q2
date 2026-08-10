@@ -37,6 +37,7 @@ public class Agent {
     this.iteration = 0;
   }
 
+  @SuppressWarnings("unchecked")
   public String run() {
     while (true) {
       if (iterationLimitReached()) {
@@ -68,6 +69,7 @@ public class Agent {
     return maxIterations > 0 && iteration >= maxIterations;
   }
 
+  @SuppressWarnings("unchecked")
   private String wrapUp(String reason) {
     context.addMessage("user", WRAP_UP_DIRECTIVE);
     try {
@@ -96,6 +98,7 @@ public class Agent {
         .collect(Collectors.joining());
   }
 
+  @SuppressWarnings("unchecked")
   private void handleToolCalls(List<Object> content) {
     context.addMessage("assistant", content);
 

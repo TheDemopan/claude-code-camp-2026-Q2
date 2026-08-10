@@ -51,11 +51,13 @@ public class Client {
         String jsonBody = objectMapper.writeValueAsString(payload);
         RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
 
-        Request request = new Request.Builder()
+        Request.Builder requestBuilder = new Request.Builder()
             .url(url)
-            .post(body)
-            .apply(rb -> headers.forEach(rb::addHeader))
-            .build();
+            .post(body);
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+          requestBuilder.addHeader(header.getKey(), header.getValue());
+        }
+        Request request = requestBuilder.build();
 
         response = httpClient.newCall(request).execute();
       } catch (Exception e) {

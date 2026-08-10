@@ -31,6 +31,7 @@ public class OllamaBackend extends Backend {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public List<Map<String, Object>> toMessages(List<Message> messages) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (Message msg : messages) {
