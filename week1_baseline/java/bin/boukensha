@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#
+# Java counterpart to ruby/bin/*. Those scripts cd into a step directory and run
+# `bundle exec ruby examples/example.rb`; this one compiles the sources if they
+# are stale and runs the example class.
+#
+#   bin/boukensha                        # run com.boukensha.examples.Example
+#   bin/boukensha com.example.Other      # run a different main class
+#   MAIN_CLASS=... bin/boukensha         # same, via environment
+#
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+ROOT="$PWD"
+
+# Config dir is shared with the Ruby port so both implementations read the same
+# settings.yaml and .env. This is the repo-root .boukensha, matching
+# ruby/00_config/examples/example.rb (steps 01+ point one level lower, at a
+# directory that does not exist).
+export BOUKENSHA_DIR="${BOUKENSHA_DIR:-$(cd "$ROOT/../.." && pwd)/.boukensha}"
+
+case "${1:-}" in
+  -h|--help)
+    sed -n '3,9p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+esac
+
+MAIN_CLASS="${1:-${MAIN_CLASS:-com.boukensha.examples.Example}}"
+[ $# -gt 0 ] && shift || true
+
+SRC_DIR="$ROOT/src/main/java"
+OUT_DIR="$ROOT/target/classes"
+M2="${HOME}/.m2/repository"
+
+# Artifacts declared in pom.xml, matched loosely so a version bump still resolves.
+DEP_PATTERN='jackson-(core|databind|annotations)|okhttp-4|okio|kotlin-stdlib|dotenv-java|snakeyaml'
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# --- locate a JDK -----------------------------------------------------------
+# `java` alone is not enough; compiling needs javac, which a JRE-only install
+# does not ship. Fall back to JDKs bundled with common editors.
+find_javac() {
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+    echo "$JAVA_HOME/bin/javac"; return
+  fi
+  if command -v javac >/dev/null 2>&1; then
+    command -v javac; return
+  fi
+  local c
+  for c in \
+    /usr/lib/jvm/*/bin/javac \
+    "$HOME"/.jdks/*/bin/javac \
+    "$HOME"/.sdkman/candidates/java/*/bin/javac \
+    "$HOME"/.vscode/extensions/redhat.java-*/jre/*/bin/javac \
+    "$HOME"/.vscode-server/extensions/redhat.java-*/jre/*/bin/javac \
+    "$HOME"/.local/share/flatpak/app/com.jetbrains.*/current/active/files/jbr/bin/javac \
+    "$HOME"/.local/share/flatpak/app/com.jetbrains.*/x86_64/stable/*/files/jbr/bin/javac
+  do
+    [ -x "$c" ] && { echo "$c"; return; }
+  done
+}
+
+JAVAC="$(find_javac || true)"
+[ -n "$JAVAC" ] || die "no javac found. Install a JDK (e.g. 'sudo apt install openjdk-21-jdk') or set JAVA_HOME."
+JAVA_BIN="$(dirname "$JAVAC")/java"
+[ -x "$JAVA_BIN" ] || JAVA_BIN="$(command -v java)" || die "no java runtime found."
+
+# --- classpath --------------------------------------------------------------
+[ -d "$M2" ] || die "$M2 not found. Run 'mvn dependency:go-offline' to populate it."
+CP="$(find "$M2" -name '*.jar' 2>/dev/null | grep -E "$DEP_PATTERN" | tr '\n' ':')"
+[ -n "$CP" ] || die "no dependency jars in $M2. Run 'mvn dependency:go-offline' first."
+
+# --- compile when sources are newer than classes ----------------------------
+newest() { find "$1" -name "$2" -newer "$3" -print -quit 2>/dev/null; }
+
+needs_build=0
+if [ ! -d "$OUT_DIR" ] || [ -z "$(find "$OUT_DIR" -name '*.class' -print -quit 2>/dev/null)" ]; then
+  needs_build=1
+else
+  # Rebuild if any source is newer than the oldest class file we can find.
+  oldest_class="$(find "$OUT_DIR" -name '*.class' -printf '%T@ %p\n' 2>/dev/null | sort -n | head -1 | cut -d' ' -f2-)"
+  [ -n "$oldest_class" ] && [ -n "$(newest "$SRC_DIR" '*.java' "$oldest_class")" ] && needs_build=1
+fi
+
+if [ "$needs_build" -eq 1 ]; then
+  echo "[boukensha] compiling..." >&2
+  mkdir -p "$OUT_DIR"
+  # shellcheck disable=SC2046
+  "$JAVAC" -cp "$CP" -d "$OUT_DIR" $(find "$SRC_DIR" -name '*.java') \
+    || die "compilation failed."
+fi
+
+# --- run --------------------------------------------------------------------
+exec "$JAVA_BIN" -cp "$OUT_DIR:$CP" "$MAIN_CLASS" "$@"

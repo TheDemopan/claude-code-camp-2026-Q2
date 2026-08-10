@@ -1,43 +1,64 @@
 package com.boukensha.logger;
 
+import com.boukensha.model.Message;
+import com.boukensha.tool.Tool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
-public class SessionLogger {
+/**
+ * JSONL session log. Every line carries session_id and an ISO-8601 timestamp
+ * alongside the phase-specific fields, matching the Ruby logger byte for byte
+ * in field names so existing log tooling keeps working.
+ */
+public class SessionLogger implements AutoCloseable {
   private static final String DEFAULT_SESSION_DIR = "sessions";
+  private static final DateTimeFormatter SESSION_ID_FORMAT =
+      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
   private final String sessionId;
   private final String path;
-  private final FileWriter logWriter;
-  private final ObjectMapper objectMapper;
+  private final Writer logWriter;
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final List<Consumer<Map<String, Object>>> subscribers = new ArrayList<>();
+  private boolean debug;
 
-  public SessionLogger() throws IOException {
-    this(null, null, null, new HashMap<>());
+  public SessionLogger(String dir) throws IOException {
+    this(null, dir, null, Map.of());
   }
 
-  public SessionLogger(String sessionId, String dir, String logPath, Map<String, Object> snapshot) throws IOException {
+  public SessionLogger(String sessionId, String dir, String logPath, Map<String, Object> snapshot)
+      throws IOException {
     this.sessionId = sessionId != null ? sessionId : generateSessionId();
-    this.path = logPath != null ? logPath : buildPath(dir);
-    this.objectMapper = new ObjectMapper();
+    this.path = logPath != null ? logPath : defaultPath(dir);
 
-    // Ensure directory exists
-    String parentDir = new File(path).getParent();
-    if (parentDir != null) {
-      Files.createDirectories(Paths.get(parentDir));
+    String parent = new File(this.path).getParent();
+    if (parent != null) {
+      Files.createDirectories(Paths.get(parent));
     }
+    this.logWriter = Files.newBufferedWriter(Paths.get(this.path), StandardCharsets.UTF_8,
+        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
-    this.logWriter = new FileWriter(path, true);
-    writeLog(mergeMap(snapshot, Map.of("phase", "session_start")));
+    Map<String, Object> start = new LinkedHashMap<>();
+    start.put("phase", "session_start");
+    start.putAll(snapshot);
+    write(start);
   }
 
   public String getSessionId() {
@@ -48,103 +69,137 @@ public class SessionLogger {
     return path;
   }
 
-  public void iteration(int n, int max) throws IOException {
-    writeLog(Map.of("phase", "iteration", "n", n, "max", max));
+  /** Mirrors Boukensha.debug? gating on the raw phase. */
+  public void setDebug(boolean debug) {
+    this.debug = debug;
   }
 
-  public void limitReached(String kind, int n, int max) throws IOException {
-    writeLog(Map.of("phase", "limit_reached", "kind", kind, "n", n, "max", max));
+  /** Streams every event to a listener, as Logger#subscribe does for the TUI. */
+  public void subscribe(Consumer<Map<String, Object>> subscriber) {
+    subscribers.add(subscriber);
   }
 
-  public void turnEnd(String reason, int iterations, Integer tokens) throws IOException {
-    Map<String, Object> event = new HashMap<>();
-    event.put("phase", "turn_end");
-    event.put("reason", reason);
-    event.put("iterations", iterations);
-    if (tokens != null) {
-      event.put("tokens", tokens);
+  public void turn(int n) {
+    write(event("turn", "n", n));
+  }
+
+  public void iteration(int n, int max) {
+    write(event("iteration", "n", n, "max", max));
+  }
+
+  public void limitReached(String kind, int n, int max) {
+    write(event("limit_reached", "kind", kind, "n", n, "max", max));
+  }
+
+  public void turnEnd(String reason, int iterations, Integer tokens) {
+    write(event("turn_end", "reason", reason, "iterations", iterations, "tokens", tokens));
+  }
+
+  public void prompt(List<Message> messages, Map<String, Tool> tools, int contextWindow) {
+    List<Map<String, Object>> serialized = new ArrayList<>();
+    for (Message m : messages) {
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("role", m.getRole());
+      entry.put("content", m.getContent());
+      serialized.add(entry);
     }
-    writeLog(event);
+    write(event("prompt",
+        "message_count", messages.size(),
+        "messages", serialized,
+        "tool_count", tools.size(),
+        "tools", new ArrayList<>(tools.keySet()),
+        "context_window", contextWindow));
   }
 
-  public void prompt(List<Map<String, Object>> messages, Map<String, Object> tools) throws IOException {
-    Map<String, Object> event = new HashMap<>();
-    event.put("phase", "prompt");
-    event.put("message_count", messages.size());
-    event.put("messages", messages);
-    event.put("tool_count", tools.size());
-    event.put("tools", new ArrayList<>(tools.keySet()));
-    writeLog(event);
+  public void compaction(int before, int dropped, int contextWindow) {
+    write(event("compaction", "before", before, "dropped", dropped, "context_window", contextWindow));
   }
 
-  public void toolCall(String name, Map<String, Object> args) throws IOException {
-    writeLog(Map.of("phase", "tool_call", "name", name, "args", args));
+  public void toolCall(String name, Object args) {
+    write(event("tool_call", "name", name, "args", args));
   }
 
-  public void toolResult(String name, String result, boolean ok, String error) throws IOException {
-    Map<String, Object> event = new HashMap<>();
-    event.put("phase", "tool_result");
-    event.put("name", name);
-    event.put("result", result);
-    event.put("ok", ok);
-    if (error != null) {
-      event.put("error", error);
-    }
-    writeLog(event);
+  public void toolResult(String name, Object result, boolean ok, String error) {
+    write(event("tool_result", "name", name, "result", String.valueOf(result), "ok", ok, "error", error));
   }
 
-  public void response(String text, Map<String, Object> usage, String stopReason, String task, String backend) throws IOException {
-    Map<String, Object> event = new HashMap<>();
-    event.put("phase", "response");
-    event.put("text", text != null ? text.strip() : "");
-    if (usage != null) {
-      event.put("usage", usage);
-    }
-    if (stopReason != null) {
-      event.put("stop_reason", stopReason);
-    }
-    if (task != null) {
-      event.put("task", task);
-    }
-    if (backend != null) {
-      event.put("provider", backend);
-    }
-    writeLog(event);
+  public void response(String text, Object usage, String stopReason) {
+    write(event("response", "text", text == null ? "" : text.strip(), "usage", usage, "stop_reason", stopReason));
   }
 
-  public void close() throws IOException {
-    if (logWriter != null) {
+  public void reasoning(String text, boolean redacted) {
+    write(event("reasoning", "text", text == null ? "" : text, "redacted", redacted));
+  }
+
+  public void plan(String text) {
+    write(event("plan", "text", text == null ? "" : text.strip()));
+  }
+
+  public void raw(Object data) {
+    if (!debug) {
+      return;
+    }
+    write(event("raw", "data", data));
+  }
+
+  @Override
+  public void close() {
+    try {
       logWriter.close();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
   }
 
-  private void writeLog(Map<String, Object> event) throws IOException {
-    Map<String, Object> fullEvent = new HashMap<>(event);
-    fullEvent.put("session_id", sessionId);
-    fullEvent.put("at", Instant.now().toString());
-
-    String json = objectMapper.writeValueAsString(fullEvent);
-    logWriter.write(json + "\n");
-    logWriter.flush();
+  /**
+   * Builds an ordered event map. Null values are kept, since Ruby emits explicit
+   * nulls for absent usage/error/tokens and log consumers rely on the key.
+   */
+  private Map<String, Object> event(String phase, Object... keyValues) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("phase", phase);
+    for (int i = 0; i + 1 < keyValues.length; i += 2) {
+      map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+    }
+    return map;
   }
 
-  private String buildPath(String dir) {
-    String sessionDir = dir != null ? dir : DEFAULT_SESSION_DIR;
-    return sessionDir + "/" + sessionId + ".jsonl";
+  private void write(Map<String, Object> event) {
+    Map<String, Object> full = new LinkedHashMap<>(event);
+    full.put("session_id", sessionId);
+    full.put("at", Instant.now().toString());
+
+    try {
+      logWriter.write(objectMapper.writeValueAsString(full));
+      logWriter.write("\n");
+      logWriter.flush();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
+    for (Consumer<Map<String, Object>> subscriber : subscribers) {
+      subscriber.accept(event);
+    }
+  }
+
+  private String defaultPath(String dir) {
+    String base = dir != null ? dir : DEFAULT_SESSION_DIR;
+    return Paths.get(base, sessionId + ".jsonl").toString();
   }
 
   private String generateSessionId() {
-    String timestamp = java.time.format.DateTimeFormatter
-        .ofPattern("yyyyMMdd'T'HHmmss'Z'")
-        .withZone(java.time.ZoneId.of("UTC"))
-        .format(Instant.now());
-    String uuid = UUID.randomUUID().toString().substring(0, 8);
-    return timestamp + "-" + uuid;
+    String timestamp = SESSION_ID_FORMAT.format(Instant.now());
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    return timestamp + "-" + suffix;
   }
 
-  private Map<String, Object> mergeMap(Map<String, Object> base, Map<String, Object> override) {
-    Map<String, Object> result = new HashMap<>(base);
-    result.putAll(override);
-    return result;
+  /** No-op sink for callers that want an agent without a log file. */
+  public static SessionLogger nullLogger() {
+    try {
+      return new SessionLogger(null, null, File.createTempFile("boukensha-null", ".jsonl").getAbsolutePath(),
+          new HashMap<>());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 }

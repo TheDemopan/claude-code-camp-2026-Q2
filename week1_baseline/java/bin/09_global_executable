@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Step launcher — mirrors ruby/bin/09_global_executable.
+exec "$(dirname "$0")/boukensha" com.boukensha.examples.Step09GlobalExecutable "$@"
