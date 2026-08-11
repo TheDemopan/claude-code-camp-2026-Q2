@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# Fast regression check. Compiles everything, then runs only the checks that cost
+# nothing: the stub-driven smoke test and the offline steps (00-03), which make no
+# API call and need no MUD.
+#
+# Steps 04-12 hit the live API and are NOT run here — see README "Verification
+# status" for what they cover and run them by hand when touching those paths.
+#
+#   bin/verify
+#
+set -uo pipefail
+
+cd "$(dirname "$0")/.."
+
+pass=0
+fail=0
+
+check() {
+  local label="$1"; shift
+  if "$@" >/dev/null 2>&1; then
+    printf '  \033[32mPASS\033[0m  %s\n' "$label"
+    pass=$((pass + 1))
+  else
+    printf '  \033[31mFAIL\033[0m  %s\n' "$label"
+    fail=$((fail + 1))
+  fi
+}
+
+echo "[verify] compiling..."
+if ! ./bin/boukensha --help >/dev/null 2>&1; then
+  echo "  compilation or launcher failure — run ./bin/boukensha --help to see it" >&2
+  exit 1
+fi
+
+echo "[verify] smoke test (stub server, no network)"
+check "SmokeTest — agent loop, tool dispatch, JSONL" \
+  ./bin/boukensha com.boukensha.examples.SmokeTest
+
+echo "[verify] offline steps (no API call)"
+for step in 00_config 01_struct_skeleton 02_the_registry 03_prompt_builder; do
+  check "$step" "./bin/$step"
+done
+
+echo
+if [ "$fail" -eq 0 ]; then
+  printf '\033[32m%d passed, 0 failed\033[0m\n' "$pass"
+  exit 0
+fi
+printf '\033[31m%d passed, %d FAILED\033[0m\n' "$pass" "$fail"
+exit 1

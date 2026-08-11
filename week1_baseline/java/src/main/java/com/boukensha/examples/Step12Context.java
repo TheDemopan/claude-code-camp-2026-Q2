@@ -3,7 +3,6 @@ package com.boukensha.examples;
 import com.boukensha.Boukensha;
 import com.boukensha.Models;
 import com.boukensha.config.Config;
-import com.boukensha.tools.MudTools;
 
 /**
  * Step 12 — Context management.
@@ -34,13 +33,12 @@ public class Step12Context {
     options.maxTurnTokens = config.getAgentMaxTurnTokens();
     options.maxOutputTokens = config.getAgentMaxOutputTokens();
 
+    // MUD tools come from settings.yaml via registerStandardTools — see step 10.
     String result = Boukensha.run(
         "Look around, check your score and your inventory, then summarise your situation "
             + "in a few sentences.",
         options,
-        dsl -> MudTools.register(dsl.registry(),
-            config.getMudHost(), config.getMudPort(),
-            config.getMudUsername(), config.getMudPassword()));
+        null);
 
     System.out.println();
     System.out.println("=== FINAL RESPONSE ===");

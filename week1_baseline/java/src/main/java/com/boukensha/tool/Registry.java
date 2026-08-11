@@ -18,6 +18,15 @@ public class Registry {
     return tool;
   }
 
+  /**
+   * Whether a tool of this name is already registered. Lets a tool library skip
+   * re-registering itself — registering twice would overwrite the tools while
+   * leaking whatever resource the first set captured (an open MUD socket, say).
+   */
+  public boolean hasTool(String name) {
+    return context.getTools().containsKey(name);
+  }
+
   public Object dispatch(String name, Map<String, Object> args) {
     Tool tool = context.getTools().get(name);
     if (tool == null) {

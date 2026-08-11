@@ -2,7 +2,6 @@ package com.boukensha.examples;
 
 import com.boukensha.Boukensha;
 import com.boukensha.config.Config;
-import com.boukensha.tools.MudTools;
 
 /**
  * Step 10 — A standard tool library (MUD demo).
@@ -22,12 +21,13 @@ public class Step10StandardToolLibrary {
     System.out.println("API key set? " + (config.env("ANTHROPIC_API_KEY") != null));
     System.out.println();
 
+    // The MUD tools register themselves from settings.yaml — Boukensha.run does it
+    // via registerStandardTools, the same way Ruby's run does from its mud: keyword.
+    // Registering them again here would open a second telnet session.
     String result = Boukensha.run(
         "Connect to the MUD, look at your surroundings, check your score, "
             + "then look at the available exits and tell me what you see.",
-        dsl -> MudTools.register(dsl.registry(),
-            config.getMudHost(), config.getMudPort(),
-            config.getMudUsername(), config.getMudPassword()));
+        null);
 
     System.out.println();
     System.out.println("=== FINAL RESPONSE ===");

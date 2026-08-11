@@ -1,0 +1,10 @@
+{
+  "currentRoom" : 1,
+  "previousRoom" : 2,
+  "recentPath" : [ 1, 2, 3, 2, 1, 2, 3, 2, 1 ],
+  "currentObjective" : null,
+  "unexploredExits" : [ "2:e", "2:w" ],
+  "hp" : 46,
+  "mana" : 100,
+  "movement" : 82
+}

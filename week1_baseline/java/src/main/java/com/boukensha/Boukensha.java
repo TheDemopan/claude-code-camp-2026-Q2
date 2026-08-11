@@ -95,7 +95,7 @@ public final class Boukensha {
    * directory, and the MUD tools whenever a host is configured.
    */
   public static void registerStandardTools(Registry registry, Config cfg, Options options) {
-    if (options.fileTools) {
+    if (options.fileTools && !registry.hasTool("pwd")) {
       String dir = options.workingDir != null
           ? options.workingDir
           : java.nio.file.Paths.get("").toAbsolutePath().toString();
@@ -104,7 +104,12 @@ public final class Boukensha {
     }
     // mudTools true means "use config if a host is set" — matching Ruby, where
     // mud: nil falls back to settings.yaml and mud: false skips entirely.
-    if (options.mudTools && cfg.getMudHost() != null && !cfg.getMudHost().isBlank()) {
+    //
+    // The hasTool guard matters more here than for the file tools: MudTools.register
+    // opens a telnet socket and logs in, so calling it twice would leave an orphaned
+    // logged-in session behind while the registry silently kept only the second.
+    if (options.mudTools && !registry.hasTool("mud_connect")
+        && cfg.getMudHost() != null && !cfg.getMudHost().isBlank()) {
       com.boukensha.tools.MudTools.register(registry, cfg.getMudHost(), cfg.getMudPort(),
           cfg.getMudUsername(), cfg.getMudPassword());
     }
