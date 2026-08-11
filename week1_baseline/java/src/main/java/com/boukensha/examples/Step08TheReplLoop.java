@@ -12,7 +12,6 @@ import com.boukensha.model.PromptBuilder;
 import com.boukensha.repl.Repl;
 import com.boukensha.tasks.PlayerTask;
 import com.boukensha.tool.Registry;
-import com.boukensha.tools.FileSystemTools;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,7 +41,13 @@ public class Step08TheReplLoop {
     Context context = new Context(systemPrompt, Models.contextWindow(model), workingDir,
         config.getAgentCompactionThreshold());
     Registry registry = new Registry(context);
-    FileSystemTools.register(registry, workingDir);
+
+    // Same set Ruby's Boukensha.repl registers from its working_dir:/mud: keywords:
+    // filesystem + shell rooted here, plus the MUD tools when a host is configured.
+    // Without the MUD tools the banner advertises a connection the agent can't use.
+    Boukensha.Options options = new Boukensha.Options();
+    options.workingDir = workingDir;
+    Boukensha.registerStandardTools(registry, config, options);
 
     Backend backend = Boukensha.buildBackend(provider, apiKey, model, "http://localhost:11434");
     PromptBuilder builder = new PromptBuilder(context, backend);

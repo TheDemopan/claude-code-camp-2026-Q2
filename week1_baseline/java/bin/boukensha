@@ -4,7 +4,7 @@
 # `bundle exec ruby examples/example.rb`; this one compiles the sources if they
 # are stale and runs the example class.
 #
-#   bin/boukensha                        # run com.boukensha.examples.Example
+#   bin/boukensha                        # launch the interactive REPL
 #   bin/boukensha com.example.Other      # run a different main class
 #   MAIN_CLASS=... bin/boukensha         # same, via environment
 #
@@ -26,7 +26,7 @@ case "${1:-}" in
     ;;
 esac
 
-MAIN_CLASS="${1:-${MAIN_CLASS:-com.boukensha.examples.Example}}"
+MAIN_CLASS="${1:-${MAIN_CLASS:-com.boukensha.examples.Step09GlobalExecutable}}"
 [ $# -gt 0 ] && shift || true
 
 SRC_DIR="$ROOT/src/main/java"

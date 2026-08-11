@@ -74,6 +74,40 @@ public final class Boukensha {
     public Integer maxIterations;
     public Integer maxOutputTokens;
     public Integer maxTurnTokens;
+
+    /**
+     * Roots filesystem and shell tools at this directory. Defaults to the current
+     * directory; set false to opt out entirely (Ruby's working_dir: false).
+     */
+    public String workingDir;
+    public boolean fileTools = true;
+
+    /**
+     * Registers the MUD gameplay tools when settings.yaml has a mud host.
+     * Set false to skip (Ruby's mud: false).
+     */
+    public boolean mudTools = true;
+  }
+
+  /**
+   * Registers the standard tool libraries the way Ruby's run/repl do from their
+   * working_dir: and mud: keywords: filesystem + shell rooted at the working
+   * directory, and the MUD tools whenever a host is configured.
+   */
+  public static void registerStandardTools(Registry registry, Config cfg, Options options) {
+    if (options.fileTools) {
+      String dir = options.workingDir != null
+          ? options.workingDir
+          : java.nio.file.Paths.get("").toAbsolutePath().toString();
+      com.boukensha.tools.FileSystemTools.register(registry, dir);
+      com.boukensha.tools.ShellTools.register(registry, dir);
+    }
+    // mudTools true means "use config if a host is set" — matching Ruby, where
+    // mud: nil falls back to settings.yaml and mud: false skips entirely.
+    if (options.mudTools && cfg.getMudHost() != null && !cfg.getMudHost().isBlank()) {
+      com.boukensha.tools.MudTools.register(registry, cfg.getMudHost(), cfg.getMudPort(),
+          cfg.getMudUsername(), cfg.getMudPassword());
+    }
   }
 
   /** One-shot run: send a single task, get a response back, return. */
@@ -105,9 +139,10 @@ public final class Boukensha {
         ? options.maxOutputTokens : playerTask.maxOutputTokens(taskSettings);
     Integer maxTurnTokens = options.maxTurnTokens;
 
-    Context context = new Context(system, Models.contextWindow(model), null,
+    Context context = new Context(system, Models.contextWindow(model), options.workingDir,
         cfg.getAgentCompactionThreshold());
     Registry registry = new Registry(context);
+    registerStandardTools(registry, cfg, options);
     if (block != null) {
       block.define(new RunDSL(registry));
     }

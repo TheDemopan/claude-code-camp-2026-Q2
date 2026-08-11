@@ -113,4 +113,4 @@ Model: Opus 5
 
 **Agent self-report is not evidence; artifacts are.** Session logs, compiler exit codes, and assertion counts repeatedly contradicted "this is complete." The port's verification status is documented as a table separating what has live evidence from what does not — four of the five LLM backends have never sent a request, and the wind-down path that fires on hitting an iteration or token ceiling has never executed.
 
-**Final state:** 47 source files, 55 classes, 13 step launchers, 5 backends, 27 MUD tools, 1 stub-driven smoke test. Steps 00–12 execute; steps 00–12 verified live against the real Anthropic API, with 10–12 additionally verified against a live tbaMUD server.
+**Final state:** 47 source files, 55 classes, 13 step launchers, 5 backends, 27 MUD tools, 1 stub-driven smoke test. Every launcher 00–12 was executed: 00–03 offline by design (no API call), 04–12 against the real Anthropic API, and 10–12 additionally against a live tbaMUD server.
