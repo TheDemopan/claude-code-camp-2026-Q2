@@ -1,0 +1,3 @@
+{"phase":"session_start","max_output_tokens":1024,"provider":"anthropic","task":"player","max_iterations":25,"model":"claude-haiku-4-5","session_id":"20260810T185247Z-b853118b","at":"2026-08-10T18:52:47.788807536Z"}
+{"phase":"iteration","n":1,"max":25,"session_id":"20260810T185247Z-b853118b","at":"2026-08-10T18:52:47.799900631Z"}
+{"phase":"prompt","message_count":1,"messages":[{"role":"user","content":"Read the README.md file and summarise what this MUD player assistant framework can do."}],"tool_count":2,"tools":["read_file","list_directory"],"context_window":200000,"session_id":"20260810T185247Z-b853118b","at":"2026-08-10T18:52:47.800179610Z"}
